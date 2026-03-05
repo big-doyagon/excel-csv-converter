@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel → CSV コンバーター</title>
+    <script src="xlsx.full.min.js"></script>
+    <style>
+        /* ===== CSS Variables & Reset ===== */
+        :root {
+            --bg-primary: #0f1117;
+            --bg-secondary: #1a1d2e;
+            --bg-card: #212438;
+            --bg-hover: #2a2e45;
+            --bg-empty-cell: #2a2e45;
+            --border: #333755;
+            --text-primary: #e8eaf0;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
+            --accent: #6366f1;
+            --accent-hover: #818cf8;
+            --accent-glow: rgba(99, 102, 241, 0.3);
+            --success: #22c55e;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --radius: 12px;
+            --radius-sm: 8px;
+            --shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        /* ===== Layout ===== */
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 24px 20px;
+        }
+
+        header {
+            text-align: center;
+            padding: 32px 0 24px;
+        }
+
+        header h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent), #a78bfa, #f472b6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 6px;
+        }
+
+        header p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        /* ===== Step Indicator ===== */
+        .step-indicator {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+        }
+
+        .step-dot {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            background: var(--bg-secondary);
+            color: var(--text-muted);
+            border: 1px solid var(--border);
+            transition: var(--transition);
+        }
+
+        .step-dot.active {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+            box-shadow: 0 0 16px var(--accent-glow);
+        }
+
+        .step-dot.done {
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--success);
+            border-color: rgba(34, 197, 94, 0.3);
+        }
+
+        .step-dot .num {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            font-size: 0.7rem;
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .step-dot.done .num::after {
+            content: "✓";
+        }
+
+        .step-dot.done .num span {
+            display: none;
+        }
+
+        /* ===== Card ===== */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 28px;
+            box-shadow: var(--shadow);
+            animation: fadeIn 0.35s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .card h2 {
+            font-size: 1.15rem;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card h2 .icon {
+            font-size: 1.3rem;
+        }
+
+        /* ===== Step panels (hidden by default) ===== */
+        .step-panel {
+            display: none;
+        }
+
+        .step-panel.active {
+            display: block;
+        }
+
+        /* ===== Dropzone ===== */
+        .dropzone {
+            border: 2px dashed var(--border);
+            border-radius: var(--radius);
+            padding: 60px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: var(--transition);
+            position: relative;
+        }
+
+        .dropzone:hover,
+        .dropzone.dragover {
+            border-color: var(--accent);
+            background: rgba(99, 102, 241, 0.06);
+        }
+
+        .dropzone .dz-icon {
+            font-size: 3rem;
+            margin-bottom: 12px;
+        }
+
+        .dropzone p {
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .dropzone .hint {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .dropzone input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        /* ===== File info ===== */
+        .file-info {
+            margin-top: 16px;
+            padding: 12px 16px;
+            background: rgba(34, 197, 94, 0.08);
+            border: 1px solid rgba(34, 197, 94, 0.25);
+            border-radius: var(--radius-sm);
+            font-size: 0.88rem;
+            display: none;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .file-info.visible {
+            display: flex;
+        }
+
+        /* ===== Form Controls ===== */
+        label {
+            display: block;
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        select,
+        input[type="number"] {
+            width: 100%;
+            padding: 8px 12px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-size: 0.88rem;
+            transition: var(--transition);
+            outline: none;
+        }
+
+        select:focus,
+        input[type="number"]:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ===== Buttons ===== */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 22px;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 0.88rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-hover);
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        .btn-secondary {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-hover);
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: #fff;
+        }
+
+        .btn-success:hover {
+            background: #16a34a;
+            box-shadow: 0 0 20px rgba(34, 197, 94, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.4;
+            pointer-events: none;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            justify-content: flex-end;
+        }
+
+        /* ===== Data Table ===== */
+        .table-wrapper {
+            overflow-x: auto;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            margin-top: 16px;
+            max-height: 520px;
+            overflow-y: auto;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+            white-space: nowrap;
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 6px 10px;
+            border: 1px solid var(--border);
+            text-align: left;
+        }
+
+        .data-table thead th {
+            background: var(--bg-secondary);
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .data-table tbody tr:hover {
+            background: var(--bg-hover);
+        }
+
+        .data-table .row-num {
+            color: var(--text-muted);
+            background: var(--bg-secondary);
+            text-align: center;
+            font-weight: 600;
+            position: sticky;
+            left: 0;
+            z-index: 1;
+        }
+
+        .data-table .empty-cell {
+            background: var(--bg-empty-cell);
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        /* Header row highlight */
+        .data-table tbody tr.header-row {
+            background: rgba(99, 102, 241, 0.08);
+        }
+
+        .data-table tbody tr.header-row td {
+            color: var(--accent-hover);
+            font-weight: 600;
+        }
+
+        /* Excluded cell (outside data range) */
+        .data-table td.excluded-cell {
+            opacity: 0.35;
+            background: repeating-linear-gradient(135deg,
+                    transparent,
+                    transparent 4px,
+                    rgba(255, 255, 255, 0.03) 4px,
+                    rgba(255, 255, 255, 0.03) 8px);
+        }
+
+        .data-table thead th.excluded-col {
+            opacity: 0.35;
+        }
+
+        /* ===== Meta info ===== */
+        .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .meta-item {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 12px 16px;
+            text-align: center;
+        }
+
+        .meta-item .val {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--accent-hover);
+        }
+
+        .meta-item .lbl {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        /* ===== Header list ===== */
+        .header-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 16px;
+        }
+
+        .header-tag {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 0.78rem;
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        /* ===== Error / Toast ===== */
+        .error-msg {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: var(--error);
+            padding: 10px 16px;
+            border-radius: var(--radius-sm);
+            font-size: 0.85rem;
+            margin-top: 12px;
+            display: none;
+        }
+
+        .error-msg.visible {
+            display: block;
+        }
+
+        /* ===== Separator label ===== */
+        .section-sep {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin: 20px 0 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* ===== Download area ===== */
+        .download-area {
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        .download-area .dl-icon {
+            font-size: 4rem;
+            margin-bottom: 16px;
+        }
+
+        .download-area .dl-filename {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 20px;
+            word-break: break-all;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 Excel → CSV コンバーター</h1>
+            <p>ブラウザ完結 — データは一切外部に送信されません</p>
+        </header>
+
+        <!-- Step Indicator -->
+        <div class="step-indicator" id="stepIndicator">
+            <div class="step-dot active" data-step="1"><span class="num"><span>1</span></span>ファイル読込</div>
+            <div class="step-dot" data-step="2"><span class="num"><span>2</span></span>シート選択</div>
+            <div class="step-dot" data-step="3"><span class="num"><span>3</span></span>範囲設定</div>
+            <div class="step-dot" data-step="4"><span class="num"><span>4</span></span>プレビュー</div>
+            <div class="step-dot" data-step="5"><span class="num"><span>5</span></span>ダウンロード</div>
+        </div>
+
+        <!-- ===== Step 1: File Upload ===== -->
+        <div class="step-panel active" id="step1">
+            <div class="card">
+                <h2><span class="icon">📁</span> Step 1: ファイル読み込み</h2>
+                <div class="dropzone" id="dropzone">
+                    <input type="file" id="fileInput" accept=".xlsx,.xlsm,.xlsb,.xls">
+                    <div class="dz-icon">📂</div>
+                    <p>ここにExcelファイルをドラッグ＆ドロップ</p>
+                    <p>または クリックしてファイルを選択</p>
+                    <div class="hint">対応形式: .xlsx / .xlsm / .xlsb / .xls（上限 50MB）</div>
+                </div>
+                <div class="file-info" id="fileInfo">
+                    <span>✅</span>
+                    <span id="fileInfoText"></span>
+                </div>
+                <div class="error-msg" id="step1Error"></div>
+            </div>
+        </div>
+
+        <!-- ===== Step 2: Sheet Selection ===== -->
+        <div class="step-panel" id="step2">
+            <div class="card">
+                <h2><span class="icon">📋</span> Step 2: シート選択</h2>
+                <div class="form-group" style="max-width:360px;">
+                    <label for="sheetSelect">シートを選択</label>
+                    <select id="sheetSelect"></select>
+                </div>
+                <div class="btn-row">
+                    <button class="btn btn-secondary" onclick="goToStep(1)">← 戻る</button>
+                    <button class="btn btn-primary" onclick="onSheetSelected()">次へ →</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== Step 3: Range Settings ===== -->
+        <div class="step-panel" id="step3">
+            <div class="card">
+                <h2><span class="icon">⚙️</span> Step 3: データ範囲設定</h2>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="headerStartRow">ヘッダー開始行</label>
+                        <input type="number" id="headerStartRow" value="1" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="headerRowCount">ヘッダー行数</label>
+                        <input type="number" id="headerRowCount" value="1" min="1" max="5">
+                    </div>
+                    <div class="form-group">
+                        <label for="dataStartCol">データ開始列（A=1）</label>
+                        <input type="number" id="dataStartCol" value="1" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="dataEndRow">データ終了行（空欄=末尾）</label>
+                        <input type="number" id="dataEndRow" min="1" placeholder="空欄=末尾">
+                    </div>
+                    <div class="form-group">
+                        <label for="headerSep">ヘッダー結合区切り文字</label>
+                        <select id="headerSep">
+                            <option value="_" selected>_ （アンダースコア）</option>
+                            <option value="-">- （ハイフン）</option>
+                            <option value=" ">スペース</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="section-sep">生データプレビュー（上位20行）</div>
+                <div class="table-wrapper" id="rawPreviewWrapper">
+                    <table class="data-table" id="rawPreviewTable"></table>
+                </div>
+
+                <div class="btn-row">
+                    <button class="btn btn-secondary" onclick="goToStep(2)">← 戻る</button>
+                    <button class="btn btn-primary" onclick="onRangeConfirmed()">変換プレビュー →</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== Step 4: Conversion Preview ===== -->
+        <div class="step-panel" id="step4">
+            <div class="card">
+                <h2><span class="icon">👁️</span> Step 4: 変換プレビュー</h2>
+
+                <div class="meta-grid" id="metaGrid"></div>
+
+                <div class="section-sep">ヘッダー名一覧</div>
+                <div class="header-list" id="headerList"></div>
+
+                <div class="section-sep">先頭データ（5行）</div>
+                <div class="table-wrapper">
+                    <table class="data-table" id="headDataTable"></table>
+                </div>
+
+                <div class="section-sep">末尾データ（5行）</div>
+                <div class="table-wrapper">
+                    <table class="data-table" id="tailDataTable"></table>
+                </div>
+
+                <div class="btn-row">
+                    <button class="btn btn-secondary" onclick="goToStep(3)">← 戻る</button>
+                    <button class="btn btn-primary" onclick="goToStep(5)">CSVダウンロード →</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== Step 5: Download ===== -->
+        <div class="step-panel" id="step5">
+            <div class="card">
+                <div class="download-area">
+                    <div class="dl-icon">⬇️</div>
+                    <div class="dl-filename" id="dlFilename"></div>
+                    <button class="btn btn-success" id="downloadBtn" style="font-size:1rem;padding:14px 36px;">
+                        💾 CSVをダウンロード
+                    </button>
+                </div>
+                <div class="btn-row" style="justify-content:center;margin-top:28px;">
+                    <button class="btn btn-secondary" onclick="goToStep(4)">← プレビューに戻る</button>
+                    <button class="btn btn-secondary" onclick="resetAll()">🔄 最初からやり直す</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* ============================================================
+           Excel → CSV Converter — SheetJS Implementation
+           ============================================================ */
+
+        // ---- State ----
+        let workbook = null;
+        let fileName = '';
+        let currentSheetData = null;  // 2D array (merged cells expanded)
+        let convertedHeaders = [];
+        let convertedData = [];       // 2D array (data rows only)
+
+        // ---- Step Navigation ----
+        function goToStep(n) {
+            document.querySelectorAll('.step-panel').forEach(p => p.classList.remove('active'));
+            document.getElementById('step' + n).classList.add('active');
+            document.querySelectorAll('.step-dot').forEach(d => {
+                const s = parseInt(d.dataset.step);
+                d.classList.remove('active', 'done');
+                if (s < n) d.classList.add('done');
+                if (s === n) d.classList.add('active');
+            });
+        }
+
+        // ---- Utility: column number → Excel letter ----
+        function colToLetter(c) {
+            let s = '';
+            while (c > 0) {
+                c--;
+                s = String.fromCharCode(65 + (c % 26)) + s;
+                c = Math.floor(c / 26);
+            }
+            return s;
+        }
+
+        // ---- Utility: encode cell address ----
+        function encodeCell(r, c) {
+            return XLSX.utils.encode_cell({ r, c });
+        }
+
+        // ---- Utility: get cell value ----
+        function getCellValue(sheet, r, c) {
+            const addr = encodeCell(r, c);
+            const cell = sheet[addr];
+            if (!cell) return '';
+            // Use formatted text if available, else raw value
+            return cell.w !== undefined ? cell.w : (cell.v !== undefined ? String(cell.v) : '');
+        }
+
+        // ============================
+        // Step 1: File Read
+        // ============================
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('fileInput');
+        const allowedExt = ['.xlsx', '.xlsm', '.xlsb', '.xls'];
+        const MAX_SIZE = 50 * 1024 * 1024; // 50MB
+
+        dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+        dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+        dropzone.addEventListener('drop', e => {
+            e.preventDefault();
+            dropzone.classList.remove('dragover');
+            if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+        });
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length) handleFile(fileInput.files[0]);
+        });
+
+        function showError(id, msg) {
+            const el = document.getElementById(id);
+            el.textContent = msg;
+            el.classList.add('visible');
+        }
+        function hideError(id) {
+            document.getElementById(id).classList.remove('visible');
+        }
+
+        function handleFile(file) {
+            hideError('step1Error');
+            const ext = '.' + file.name.split('.').pop().toLowerCase();
+            if (!allowedExt.includes(ext)) {
+                showError('step1Error', `非対応の形式です: ${ext}。対応形式: ${allowedExt.join(', ')}`);
+                return;
+            }
+            if (file.size > MAX_SIZE) {
+                showError('step1Error', `ファイルサイズが上限（50MB）を超えています: ${(file.size / 1024 / 1024).toFixed(1)}MB`);
+                return;
+            }
+
+            fileName = file.name.replace(/\.[^.]+$/, '');
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    workbook = XLSX.read(data, { type: 'array', cellStyles: false, cellFormula: false });
+                    // Show file info
+                    document.getElementById('fileInfoText').textContent =
+                        `${file.name}（${(file.size / 1024).toFixed(1)} KB / ${workbook.SheetNames.length} シート）`;
+                    document.getElementById('fileInfo').classList.add('visible');
+                    // Populate sheet selector
+                    populateSheetSelector();
+                    // Auto-advance to step 2
+                    setTimeout(() => goToStep(2), 400);
+                } catch (err) {
+                    showError('step1Error', 'ファイルの読み込みに失敗しました: ' + err.message);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // ============================
+        // Step 2: Sheet Selection
+        // ============================
+        function populateSheetSelector() {
+            const sel = document.getElementById('sheetSelect');
+            sel.innerHTML = '';
+            workbook.SheetNames.forEach((name, i) => {
+                const opt = document.createElement('option');
+                opt.value = name;
+                opt.textContent = name;
+                if (i === 0) opt.selected = true;
+                sel.appendChild(opt);
+            });
+        }
+
+        function onSheetSelected() {
+            const sheetName = document.getElementById('sheetSelect').value;
+            loadSheet(sheetName);
+            goToStep(3);
+        }
+
+        // ============================
+        // Sheet Loading with Merge Expansion
+        // ============================
+        function loadSheet(sheetName) {
+            const sheet = workbook.Sheets[sheetName];
+            const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1');
+            const rows = range.e.r + 1;
+            const cols = range.e.c + 1;
+
+            // Build 2D array
+            const grid = [];
+            for (let r = 0; r < rows; r++) {
+                const row = [];
+                for (let c = 0; c < cols; c++) {
+                    row.push(getCellValue(sheet, r, c));
+                }
+                grid.push(row);
+            }
+
+            // Expand merged cells
+            const merges = sheet['!merges'] || [];
+            for (const m of merges) {
+                const val = grid[m.s.r][m.s.c]; // top-left value
+                for (let r = m.s.r; r <= m.e.r; r++) {
+                    for (let c = m.s.c; c <= m.e.c; c++) {
+                        grid[r][c] = val;
+                    }
+                }
+            }
+
+            currentSheetData = grid;
+            renderRawPreview();
+        }
+
+        // ============================
+        // Step 3: Raw Preview
+        // ============================
+        function renderRawPreview() {
+            if (!currentSheetData || !currentSheetData.length) return;
+
+            const headerStart = parseInt(document.getElementById('headerStartRow').value) || 1;
+            const headerCount = parseInt(document.getElementById('headerRowCount').value) || 1;
+
+            const maxRows = Math.min(currentSheetData.length, 20);
+            const cols = currentSheetData.reduce((mx, row) => Math.max(mx, row.length), 0);
+
+            const dataStartCol = parseInt(document.getElementById('dataStartCol').value) || 1;
+            const dataEndRowInput = document.getElementById('dataEndRow').value;
+            const dataEndRow = (dataEndRowInput && parseInt(dataEndRowInput) > 0) ? parseInt(dataEndRowInput) : null;
+
+            let html = '<thead><tr><th></th>';
+            for (let c = 0; c < cols; c++) {
+                const isExcludedCol = (c < dataStartCol - 1);
+                html += `<th class="${isExcludedCol ? 'excluded-col' : ''}">${colToLetter(c + 1)}</th>`;
+            }
+            html += '</tr></thead><tbody>';
+
+            for (let r = 0; r < maxRows; r++) {
+                const isHeader = (r >= headerStart - 1) && (r < headerStart - 1 + headerCount);
+                const isExcludedRow = (dataEndRow !== null && (r + 1) > dataEndRow);
+                html += `<tr class="${isHeader ? 'header-row' : ''}">`;
+                html += `<td class="row-num">${r + 1}</td>`;
+                for (let c = 0; c < cols; c++) {
+                    const val = (currentSheetData[r] && currentSheetData[r][c] !== undefined) ? currentSheetData[r][c] : '';
+                    const isExcludedCol = (c < dataStartCol - 1);
+                    const excluded = isExcludedCol || isExcludedRow;
+                    if (val === '' || val === null || val === undefined) {
+                        html += `<td class="empty-cell${excluded ? ' excluded-cell' : ''}">—</td>`;
+                    } else {
+                        html += `<td class="${excluded ? 'excluded-cell' : ''}">${escapeHtml(String(val))}</td>`;
+                    }
+                }
+                html += '</tr>';
+            }
+            html += '</tbody>';
+            document.getElementById('rawPreviewTable').innerHTML = html;
+        }
+
+        function escapeHtml(s) {
+            return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        // Re-render on settings change
+        ['headerStartRow', 'headerRowCount', 'dataStartCol', 'dataEndRow', 'headerSep'].forEach(id => {
+            document.getElementById(id).addEventListener('change', renderRawPreview);
+            document.getElementById(id).addEventListener('input', renderRawPreview);
+        });
+
+        // ============================
+        // Step 4: Conversion Preview
+        // ============================
+        function onRangeConfirmed() {
+            buildConvertedData();
+            renderConversionPreview();
+            goToStep(4);
+        }
+
+        function buildConvertedData() {
+            const headerStart = parseInt(document.getElementById('headerStartRow').value) || 1;
+            const headerCount = parseInt(document.getElementById('headerRowCount').value) || 1;
+            const dataStartCol = parseInt(document.getElementById('dataStartCol').value) || 1;
+            const dataEndRowInput = document.getElementById('dataEndRow').value;
+            const sep = document.getElementById('headerSep').value;
+
+            const grid = currentSheetData;
+            const totalRows = grid.length;
+            const totalCols = grid.reduce((mx, row) => Math.max(mx, row.length), 0);
+
+            const colStart = dataStartCol - 1; // 0-indexed
+            const colEnd = totalCols;
+
+            // --- Build headers ---
+            const headerRows = [];
+            for (let h = 0; h < headerCount; h++) {
+                const rowIdx = headerStart - 1 + h;
+                if (rowIdx < totalRows) {
+                    headerRows.push(grid[rowIdx].slice(colStart, colEnd));
+                } else {
+                    headerRows.push(new Array(colEnd - colStart).fill(''));
+                }
+            }
+
+            // Merge multi-row headers
+            const numCols = colEnd - colStart;
+            convertedHeaders = [];
+            for (let c = 0; c < numCols; c++) {
+                const parts = [];
+                for (let h = 0; h < headerCount; h++) {
+                    const val = (headerRows[h][c] || '').toString().trim();
+                    if (val === '') continue;
+                    // Deduplicate consecutive same values
+                    if (parts.length > 0 && parts[parts.length - 1] === val) continue;
+                    parts.push(val);
+                }
+                let merged = parts.join(sep).trim();
+                // Remove leading/trailing separator
+                while (merged.startsWith(sep)) merged = merged.slice(sep.length).trim();
+                while (merged.endsWith(sep)) merged = merged.slice(0, -sep.length).trim();
+                convertedHeaders.push(merged || `Column_${c + 1}`);
+            }
+
+            // --- Build data rows ---
+            const dataStartRow = headerStart - 1 + headerCount; // 0-indexed
+            let dataEndRow = totalRows;
+            if (dataEndRowInput && parseInt(dataEndRowInput) > 0) {
+                dataEndRow = Math.min(parseInt(dataEndRowInput), totalRows);
+            }
+
+            convertedData = [];
+            for (let r = dataStartRow; r < dataEndRow; r++) {
+                const row = [];
+                for (let c = colStart; c < colEnd; c++) {
+                    row.push(grid[r] && grid[r][c] !== undefined ? grid[r][c] : '');
+                }
+                convertedData.push(row);
+            }
+        }
+
+        function renderConversionPreview() {
+            // Meta info
+            const metaHtml = `
+    <div class="meta-item"><div class="val">${convertedData.length}</div><div class="lbl">データ行数</div></div>
+    <div class="meta-item"><div class="val">${convertedHeaders.length}</div><div class="lbl">列数</div></div>
+  `;
+            document.getElementById('metaGrid').innerHTML = metaHtml;
+
+            // Header tags
+            let tagsHtml = '';
+            convertedHeaders.forEach(h => { tagsHtml += `<span class="header-tag">${escapeHtml(h)}</span>`; });
+            document.getElementById('headerList').innerHTML = tagsHtml;
+
+            // Head rows
+            const headRows = convertedData.slice(0, 5);
+            document.getElementById('headDataTable').innerHTML = buildDataTableHtml(headRows, convertedHeaders);
+
+            // Tail rows
+            const tailStart = Math.max(0, convertedData.length - 5);
+            const tailRows = convertedData.slice(tailStart);
+            const tailStartIdx = tailStart;
+            document.getElementById('tailDataTable').innerHTML = buildDataTableHtml(tailRows, convertedHeaders, tailStartIdx);
+        }
+
+        function buildDataTableHtml(rows, headers, startIdx = 0) {
+            let html = '<thead><tr><th>#</th>';
+            headers.forEach(h => { html += `<th>${escapeHtml(h)}</th>`; });
+            html += '</tr></thead><tbody>';
+            rows.forEach((row, i) => {
+                html += `<tr><td class="row-num">${startIdx + i + 1}</td>`;
+                row.forEach(val => {
+                    const v = val !== null && val !== undefined ? String(val) : '';
+                    if (v === '') {
+                        html += '<td class="empty-cell">—</td>';
+                    } else {
+                        html += `<td>${escapeHtml(v)}</td>`;
+                    }
+                });
+                html += '</tr>';
+            });
+            html += '</tbody>';
+            return html;
+        }
+
+        // ============================
+        // Step 5: CSV Download
+        // ============================
+        document.getElementById('downloadBtn').addEventListener('click', downloadCsv);
+
+        function downloadCsv() {
+            const sheetName = document.getElementById('sheetSelect').value;
+            const csvFileName = `${fileName}_${sheetName}.csv`;
+            document.getElementById('dlFilename').textContent = csvFileName;
+
+            // Build CSV string
+            const lines = [];
+            // Header line
+            lines.push(convertedHeaders.map(csvEscape).join(','));
+            // Data lines
+            convertedData.forEach(row => {
+                lines.push(row.map(v => csvEscape(v !== null && v !== undefined ? String(v) : '')).join(','));
+            });
+
+            const csvString = lines.join('\r\n') + '\r\n';
+
+            // BOM + UTF-8
+            const bom = '\uFEFF';
+            const blob = new Blob([bom + csvString], { type: 'text/csv;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = csvFileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function csvEscape(val) {
+            if (val.includes(',') || val.includes('"') || val.includes('\n') || val.includes('\r')) {
+                return '"' + val.replace(/"/g, '""') + '"';
+            }
+            return val;
+        }
+
+        // Update filename display when reaching step 5
+        const origGoToStep = goToStep;
+        goToStep = function (n) {
+            origGoToStep(n);
+            if (n === 5) {
+                const sheetName = document.getElementById('sheetSelect').value;
+                document.getElementById('dlFilename').textContent = `${fileName}_${sheetName}.csv`;
+            }
+        };
+
+        // ============================
+        // Reset
+        // ============================
+        function resetAll() {
+            workbook = null;
+            fileName = '';
+            currentSheetData = null;
+            convertedHeaders = [];
+            convertedData = [];
+            document.getElementById('fileInput').value = '';
+            document.getElementById('fileInfo').classList.remove('visible');
+            hideError('step1Error');
+            document.getElementById('headerStartRow').value = 1;
+            document.getElementById('headerRowCount').value = 1;
+            document.getElementById('dataStartCol').value = 1;
+            document.getElementById('dataEndRow').value = '';
+            document.getElementById('headerSep').value = '_';
+            goToStep(1);
+        }
+    </script>
+</body>
+
+</html>

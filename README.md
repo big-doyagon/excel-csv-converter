@@ -1,57 +1,51 @@
-# Excel → CSV コンバーター（社内配布版）
+# Excel → CSV コンバーター
 
-## フォルダ構成
+ブラウザ完結型の Excel → CSV 変換ツール。  
+データは一切外部に送信されません。
 
-```
-excel-csv-converter/
-├── converter.html          ← メインのHTMLファイル（ブラウザで開く）
-├── lib/
-│   └── xlsx.full.min.js    ← SheetJS ライブラリ本体（※手動で配置）
-└── README.md               ← このファイル
-```
+## ファイル構成
 
-## セットアップ手順
+| ファイル | 説明 |
+|---------|------|
+| `converter.html` | 変換ツール本体（HTML + CSS + JavaScript） |
+| `xlsx.full.min.js` | [SheetJS](https://sheetjs.com/) ライブラリ（ローカル配置） |
 
-### 1. SheetJS ライブラリを取得する
+> ⚠️ 2ファイルを**同じフォルダ**に配置してください。
 
-以下のURLから **バージョンを固定して** ダウンロードしてください：
+## 使い方
 
-```
-https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js
-```
+1. `converter.html` をブラウザ（Chrome / Edge / Firefox 等）で開く
+2. Excelファイルをドラッグ＆ドロップ、またはファイル選択
+3. シートを選択
+4. ヘッダー開始行・行数・データ範囲を設定し、プレビューで確認
+5. CSVをダウンロード
 
-> ⚠ `xlsx-latest` ではなく、必ず特定のバージョン番号を指定してください。
-> 最新のバージョン番号は https://git.sheetjs.com/sheetjs/sheetjs で確認できます。
+## 対応形式
 
-### 2. ダウンロードしたファイルを配置する
+- `.xlsx`（Excel 2007以降）
+- `.xlsm`（マクロ有効ブック）
+- `.xlsb`（バイナリブック）
+- `.xls`（Excel 97-2003）
+- ファイルサイズ上限: **50MB**
 
-`lib/` フォルダに `xlsx.full.min.js` として保存します。
+## CSV出力仕様
 
-### 3. 動作確認
+| 項目 | 値 |
+|------|-----|
+| エンコーディング | UTF-8（BOM付き） |
+| 改行コード | CRLF |
+| ファイル名 | `{元ファイル名}_{シート名}.csv` |
 
-`converter.html` をブラウザで直接開いて、Excelファイルを読み込めれば完了です。
+## 主な機能
 
----
+- **セル結合の自動展開** — 結合セルの値を自動的にコピー展開
+- **複数行ヘッダー結合** — 最大5行までのヘッダーを区切り文字で連結（重複除去付き）
+- **除外範囲のグレーアウト表示** — データ範囲外がプレビューで視覚的にわかる
 
-## 変更履歴（オリジナルからの差分）
+## SheetJS について
 
-| 項目 | 変更内容 |
-|------|----------|
-| SheetJS 読み込み | 外部CDN → `./lib/xlsx.full.min.js`（ローカル参照） |
-| CSP メタタグ | `script-src 'self' 'unsafe-inline'` を追加 |
-| .xlsm 警告 | マクロ有効ブックを読み込んだ際に注意メッセージを表示 |
+`xlsx.full.min.js` は [SheetJS Community Edition](https://sheetjs.com/) のライブラリです。  
+セキュリティとオフライン動作のため、CDNではなくローカルファイルとして配置しています。
 
-## 社内Webサーバーで配信する場合
-
-HTTPヘッダーでCSPを設定するとより安全です：
-
-```
-Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'
-```
-
-## ライブラリ更新手順
-
-1. 新バージョンの `xlsx.full.min.js` を公式サイトからダウンロード
-2. `lib/xlsx.full.min.js` を差し替え
-3. `converter.html` 内のバージョンコメントを更新
-4. 動作確認
+ライブラリを更新する場合は、公式サイトから最新版をダウンロードして差し替えてください:  
+https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js
