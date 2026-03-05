@@ -578,6 +578,13 @@
                     </div>
                 </div>
 
+                <label
+                    style="display:inline-flex;align-items:center;gap:8px;font-size:0.85rem;cursor:pointer;margin-bottom:8px;">
+                    <input type="checkbox" id="removeBlankCols" checked
+                        style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;">
+                    空白列を除外する（ヘッダー・データがすべて空の列）
+                </label>
+
                 <div class="section-sep">生データプレビュー（上位50行）</div>
                 <div class="table-wrapper" id="rawPreviewWrapper">
                     <table class="data-table" id="rawPreviewTable"></table>
@@ -940,6 +947,24 @@
                     row.push(grid[r] && grid[r][c] !== undefined ? grid[r][c] : '');
                 }
                 convertedData.push(row);
+            }
+
+            // --- Remove blank columns if option checked ---
+            const removeBlank = document.getElementById('removeBlankCols').checked;
+            if (removeBlank) {
+                const nonBlankIndices = [];
+                for (let c = 0; c < convertedHeaders.length; c++) {
+                    const headerEmpty = (convertedHeaders[c] === '' || convertedHeaders[c] === `Column_${c + 1}`);
+                    const dataEmpty = convertedData.every(row => {
+                        const v = row[c];
+                        return v === '' || v === null || v === undefined;
+                    });
+                    if (!(headerEmpty && dataEmpty)) {
+                        nonBlankIndices.push(c);
+                    }
+                }
+                convertedHeaders = nonBlankIndices.map(i => convertedHeaders[i]);
+                convertedData = convertedData.map(row => nonBlankIndices.map(i => row[i]));
             }
         }
 
