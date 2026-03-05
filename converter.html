@@ -518,7 +518,7 @@
                     <div class="dz-icon">📂</div>
                     <p>ここにExcelファイルをドラッグ＆ドロップ</p>
                     <p>または クリックしてファイルを選択</p>
-                    <div class="hint">対応形式: .xlsx / .xlsm / .xlsb / .xls（上限 50MB）</div>
+                    <div class="hint">対応形式: .xlsx / .xlsm / .xlsb / .xls（上限 100MB）</div>
                 </div>
                 <div class="file-info" id="fileInfo">
                     <span>✅</span>
@@ -690,7 +690,7 @@
         const dropzone = document.getElementById('dropzone');
         const fileInput = document.getElementById('fileInput');
         const allowedExt = ['.xlsx', '.xlsm', '.xlsb', '.xls'];
-        const MAX_SIZE = 50 * 1024 * 1024; // 50MB
+        const MAX_SIZE = 100 * 1024 * 1024; // 100MB
 
         dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
         dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
@@ -720,7 +720,7 @@
                 return;
             }
             if (file.size > MAX_SIZE) {
-                showError('step1Error', `ファイルサイズが上限（50MB）を超えています: ${(file.size / 1024 / 1024).toFixed(1)}MB`);
+                showError('step1Error', `ファイルサイズが上限（100MB）を超えています: ${(file.size / 1024 / 1024).toFixed(1)}MB`);
                 return;
             }
 
