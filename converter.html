@@ -557,6 +557,10 @@
                         <input type="number" id="headerRowCount" value="1" min="1" max="5">
                     </div>
                     <div class="form-group">
+                        <label for="dataStartRow">データ開始行</label>
+                        <input type="number" id="dataStartRow" min="2" placeholder="自動">
+                    </div>
+                    <div class="form-group">
                         <label for="dataStartCol">データ開始列（A=1）</label>
                         <input type="number" id="dataStartCol" value="1" min="1">
                     </div>
@@ -574,7 +578,7 @@
                     </div>
                 </div>
 
-                <div class="section-sep">生データプレビュー（上位20行）</div>
+                <div class="section-sep">生データプレビュー（上位50行）</div>
                 <div class="table-wrapper" id="rawPreviewWrapper">
                     <table class="data-table" id="rawPreviewTable"></table>
                 </div>
@@ -805,7 +809,20 @@
             const headerStart = parseInt(document.getElementById('headerStartRow').value) || 1;
             const headerCount = parseInt(document.getElementById('headerRowCount').value) || 1;
 
-            const maxRows = Math.min(currentSheetData.length, 20);
+            // Update dataStartRow min value dynamically
+            const headerEnd = headerStart + headerCount; // 1-indexed, first row after header
+            const dataStartRowEl = document.getElementById('dataStartRow');
+            dataStartRowEl.min = headerEnd;
+            if (dataStartRowEl.value && parseInt(dataStartRowEl.value) < headerEnd) {
+                dataStartRowEl.value = headerEnd;
+            }
+            dataStartRowEl.placeholder = headerEnd + '（自動）';
+
+            const dataStartRowInput = dataStartRowEl.value;
+            const effectiveDataStartRow = (dataStartRowInput && parseInt(dataStartRowInput) > 0)
+                ? parseInt(dataStartRowInput) : headerEnd;
+
+            const maxRows = Math.min(currentSheetData.length, 50);
             const cols = currentSheetData.reduce((mx, row) => Math.max(mx, row.length), 0);
 
             const dataStartCol = parseInt(document.getElementById('dataStartCol').value) || 1;
@@ -820,8 +837,11 @@
             html += '</tr></thead><tbody>';
 
             for (let r = 0; r < maxRows; r++) {
+                const rowNum = r + 1; // 1-indexed
                 const isHeader = (r >= headerStart - 1) && (r < headerStart - 1 + headerCount);
-                const isExcludedRow = (dataEndRow !== null && (r + 1) > dataEndRow);
+                const isBeforeData = !isHeader && (rowNum < effectiveDataStartRow);
+                const isAfterData = (dataEndRow !== null && rowNum > dataEndRow);
+                const isExcludedRow = isBeforeData || isAfterData;
                 html += `<tr class="${isHeader ? 'header-row' : ''}">`;
                 html += `<td class="row-num">${r + 1}</td>`;
                 for (let c = 0; c < cols; c++) {
@@ -845,7 +865,7 @@
         }
 
         // Re-render on settings change
-        ['headerStartRow', 'headerRowCount', 'dataStartCol', 'dataEndRow', 'headerSep'].forEach(id => {
+        ['headerStartRow', 'headerRowCount', 'dataStartRow', 'dataStartCol', 'dataEndRow', 'headerSep'].forEach(id => {
             document.getElementById(id).addEventListener('change', renderRawPreview);
             document.getElementById(id).addEventListener('input', renderRawPreview);
         });
@@ -862,6 +882,7 @@
         function buildConvertedData() {
             const headerStart = parseInt(document.getElementById('headerStartRow').value) || 1;
             const headerCount = parseInt(document.getElementById('headerRowCount').value) || 1;
+            const dataStartRowInput = document.getElementById('dataStartRow').value;
             const dataStartCol = parseInt(document.getElementById('dataStartCol').value) || 1;
             const dataEndRowInput = document.getElementById('dataEndRow').value;
             const sep = document.getElementById('headerSep').value;
@@ -904,7 +925,9 @@
             }
 
             // --- Build data rows ---
-            const dataStartRow = headerStart - 1 + headerCount; // 0-indexed
+            const headerEnd = headerStart - 1 + headerCount; // 0-indexed
+            const dataStartRow = (dataStartRowInput && parseInt(dataStartRowInput) > 0)
+                ? parseInt(dataStartRowInput) - 1 : headerEnd; // 0-indexed
             let dataEndRow = totalRows;
             if (dataEndRowInput && parseInt(dataEndRowInput) > 0) {
                 dataEndRow = Math.min(parseInt(dataEndRowInput), totalRows);
