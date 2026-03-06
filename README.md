@@ -5,16 +5,16 @@
 
 ## ファイル構成
 
-| ファイル | 説明 |
-|---------|------|
-| `converter.html` | 変換ツール本体（HTML + CSS + JavaScript） |
-| `xlsx.full.min.js` | [SheetJS](https://sheetjs.com/) ライブラリ（ローカル配置） |
-
-> ⚠️ 2ファイルを**同じフォルダ**に配置してください。
+```
+📁 任意のフォルダ/
+├── excel-csv-converter.html   … 変換ツール本体
+└── lib/
+    └── xlsx.full.min.js       … SheetJS ライブラリ
+```
 
 ## 使い方
 
-1. `converter.html` をブラウザ（Chrome / Edge / Firefox 等）で開く
+1. `excel-csv-converter.html` をブラウザ（Chrome / Edge / Firefox 等）で開く
 2. Excelファイルをドラッグ＆ドロップ、またはファイル選択
 3. シートを選択
 4. ヘッダー開始行・行数・データ範囲を設定し、プレビューで確認
