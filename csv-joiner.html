@@ -1,0 +1,1366 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSV Joiner ツール</title>
+    <script src="lib/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0f1117;
+            --bg-secondary: #1a1d2e;
+            --bg-card: #212438;
+            --bg-hover: #2a2e45;
+            --border: #333755;
+            --text-primary: #e8eaf0;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
+            --accent: #6366f1;
+            --accent-hover: #818cf8;
+            --accent-glow: rgba(99, 102, 241, 0.3);
+            --success: #22c55e;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --radius: 12px;
+            --radius-sm: 8px;
+            --shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            --left-color: #3b82f6;
+            --right-color: #f59e0b;
+        }
+
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 24px 20px;
+        }
+
+        header {
+            text-align: center;
+            padding: 32px 0 24px;
+        }
+
+        header h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent), #a78bfa, #f472b6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 6px;
+        }
+
+        header p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        /* Step Indicator */
+        .step-indicator {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+        }
+
+        .step-dot {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            background: var(--bg-secondary);
+            color: var(--text-muted);
+            border: 1px solid var(--border);
+            transition: var(--transition);
+        }
+
+        .step-dot.active {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+            box-shadow: 0 0 16px var(--accent-glow);
+        }
+
+        .step-dot.done {
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--success);
+            border-color: rgba(34, 197, 94, 0.3);
+        }
+
+        .step-dot .num {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            font-size: 0.7rem;
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .step-dot.done .num::after {
+            content: "✓";
+        }
+
+        .step-dot.done .num span {
+            display: none;
+        }
+
+        /* Card */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 28px;
+            box-shadow: var(--shadow);
+            animation: fadeIn 0.35s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(12px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .card h2 {
+            font-size: 1.15rem;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card h2 .icon {
+            font-size: 1.3rem;
+        }
+
+        .step-panel {
+            display: none;
+        }
+
+        .step-panel.active {
+            display: block;
+        }
+
+        /* Dropzone */
+        .drop-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .dropzone {
+            border: 2px dashed var(--border);
+            border-radius: var(--radius);
+            padding: 40px 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: var(--transition);
+            position: relative;
+            min-height: 180px;
+        }
+
+        .dropzone:hover,
+        .dropzone.dragover {
+            border-color: var(--accent);
+            background: rgba(99, 102, 241, 0.06);
+        }
+
+        .dropzone.loaded {
+            border-color: var(--success);
+            border-style: solid;
+            background: rgba(34, 197, 94, 0.05);
+        }
+
+        .dropzone .dz-icon {
+            font-size: 2.5rem;
+            margin-bottom: 8px;
+        }
+
+        .dropzone p {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-bottom: 4px;
+        }
+
+        .dropzone .hint {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .dropzone input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .dropzone .file-loaded-info {
+            font-size: 0.82rem;
+            color: var(--success);
+            margin-top: 8px;
+        }
+
+        .drop-label {
+            font-size: 0.82rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            text-align: center;
+            padding: 4px 12px;
+            border-radius: 6px;
+        }
+
+        .drop-label.left {
+            color: var(--left-color);
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .drop-label.right {
+            color: var(--right-color);
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        /* Swap button */
+        .swap-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            border: 2px solid var(--border);
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 1.3rem;
+            cursor: pointer;
+            transition: var(--transition);
+            margin: auto;
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 5;
+        }
+
+        .swap-btn:hover {
+            border-color: var(--accent);
+            background: var(--bg-hover);
+        }
+
+        .swap-area {
+            position: relative;
+        }
+
+        /* Form Controls */
+        label {
+            display: block;
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        select,
+        input[type="number"],
+        input[type="text"] {
+            width: 100%;
+            padding: 8px 12px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-size: 0.88rem;
+            transition: var(--transition);
+            outline: none;
+        }
+
+        select:focus,
+        input:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 22px;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 0.88rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-hover);
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        .btn-secondary {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-hover);
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: #fff;
+        }
+
+        .btn-success:hover {
+            background: #16a34a;
+            box-shadow: 0 0 20px rgba(34, 197, 94, 0.3);
+        }
+
+        .btn-danger {
+            background: var(--error);
+            color: #fff;
+            font-size: 0.78rem;
+            padding: 4px 10px;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .btn:disabled {
+            opacity: 0.4;
+            pointer-events: none;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            justify-content: flex-end;
+        }
+
+        /* Condition rows */
+        .condition-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin: 16px 0;
+        }
+
+        .condition-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 16px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            flex-wrap: wrap;
+        }
+
+        .condition-row select {
+            width: auto;
+            min-width: 140px;
+            flex: 1;
+        }
+
+        .condition-row .cond-label {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        .condition-type-badge {
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-equal {
+            background: rgba(99, 102, 241, 0.15);
+            color: var(--accent-hover);
+        }
+
+        .badge-range {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--warning);
+        }
+
+        .add-cond-btns {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        /* JOIN selector */
+        .join-selector {
+            display: flex;
+            gap: 8px;
+            margin: 16px 0;
+            flex-wrap: wrap;
+        }
+
+        .join-option {
+            padding: 10px 20px;
+            border: 2px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: var(--transition);
+        }
+
+        .join-option:hover {
+            border-color: var(--accent);
+            color: var(--text-primary);
+        }
+
+        .join-option.selected {
+            border-color: var(--accent);
+            background: rgba(99, 102, 241, 0.12);
+            color: var(--accent-hover);
+            box-shadow: 0 0 12px var(--accent-glow);
+        }
+
+        /* Data Table */
+        .table-wrapper {
+            overflow-x: auto;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            margin-top: 16px;
+            max-height: 520px;
+            overflow-y: auto;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+            white-space: nowrap;
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 6px 10px;
+            border: 1px solid var(--border);
+            text-align: left;
+        }
+
+        .data-table thead th {
+            background: var(--bg-secondary);
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .data-table tbody tr:hover {
+            background: var(--bg-hover);
+        }
+
+        .data-table .row-num {
+            color: var(--text-muted);
+            background: var(--bg-secondary);
+            text-align: center;
+            font-weight: 600;
+            position: sticky;
+            left: 0;
+            z-index: 1;
+        }
+
+        .data-table .empty-cell {
+            background: var(--bg-hover);
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        /* Meta */
+        .meta-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .meta-item {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 12px 16px;
+            text-align: center;
+        }
+
+        .meta-item .val {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--accent-hover);
+        }
+
+        .meta-item .lbl {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .section-sep {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin: 20px 0 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Error / Warning */
+        .error-msg,
+        .warning-msg {
+            padding: 10px 16px;
+            border-radius: var(--radius-sm);
+            font-size: 0.85rem;
+            margin-top: 12px;
+            display: none;
+        }
+
+        .error-msg {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: var(--error);
+        }
+
+        .warning-msg {
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            color: var(--warning);
+        }
+
+        .error-msg.visible,
+        .warning-msg.visible {
+            display: block;
+        }
+
+        /* Download */
+        .download-area {
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        .download-area .dl-icon {
+            font-size: 4rem;
+            margin-bottom: 16px;
+        }
+
+        .download-area .dl-filename {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 20px;
+            word-break: break-all;
+        }
+
+        /* Column info */
+        .col-info {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .col-tag {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 3px 8px;
+            font-size: 0.72rem;
+            color: var(--text-primary);
+        }
+
+        /* LR assignment inline */
+        .lr-assign {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .lr-badge {
+            flex: 1;
+            min-width: 200px;
+            padding: 12px 16px;
+            border-radius: var(--radius-sm);
+            text-align: center;
+        }
+
+        .lr-badge.left {
+            background: rgba(59, 130, 246, 0.08);
+            border: 1px solid rgba(59, 130, 246, 0.35);
+        }
+
+        .lr-badge.right {
+            background: rgba(245, 158, 11, 0.08);
+            border: 1px solid rgba(245, 158, 11, 0.35);
+        }
+
+        .lr-badge .lr-title {
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .lr-badge.left .lr-title {
+            color: var(--left-color);
+        }
+
+        .lr-badge.right .lr-title {
+            color: var(--right-color);
+        }
+
+        .lr-badge .lr-name {
+            font-size: 0.88rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            word-break: break-all;
+        }
+
+        .lr-badge .lr-meta {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .swap-btn-inline {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid var(--border);
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: var(--transition);
+            flex-shrink: 0;
+        }
+
+        .swap-btn-inline:hover {
+            border-color: var(--accent);
+            background: var(--bg-hover);
+        }
+
+        /* Data preview section in Step 2 */
+        .preview-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-top: 12px;
+            overflow: hidden;
+        }
+
+        .preview-pane {
+            min-width: 0;
+            overflow: hidden;
+        }
+
+        .preview-pane .pane-title {
+            font-size: 0.78rem;
+            font-weight: 700;
+            margin-bottom: 6px;
+            padding: 3px 10px;
+            border-radius: 4px;
+            display: inline-block;
+        }
+
+        .preview-pane .pane-title.left {
+            color: var(--left-color);
+            background: rgba(59, 130, 246, 0.1);
+        }
+
+        .preview-pane .pane-title.right {
+            color: var(--right-color);
+            background: rgba(245, 158, 11, 0.1);
+        }
+
+        .preview-pane .table-wrapper {
+            max-height: 240px;
+            margin-top: 4px;
+            overflow-x: auto;
+            overflow-y: auto;
+        }
+
+        @media (max-width: 700px) {
+            .drop-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .preview-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .swap-btn-inline {
+                transform: rotate(90deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>🔗 CSV Joiner ツール</h1>
+            <p>ブラウザ完結 — データは一切外部に送信されません</p>
+        </header>
+        <div class="step-indicator" id="stepIndicator">
+            <div class="step-dot active" data-step="1"><span class="num"><span>1</span></span>ファイル読込</div>
+            <div class="step-dot" data-step="2"><span class="num"><span>2</span></span>結合条件</div>
+            <div class="step-dot" data-step="3"><span class="num"><span>3</span></span>プレビュー</div>
+            <div class="step-dot" data-step="4"><span class="num"><span>4</span></span>ダウンロード</div>
+        </div>
+
+        <!-- Step 1: File Upload -->
+        <div class="step-panel active" id="step1">
+            <div class="card">
+                <h2><span class="icon">📁</span> Step 1: ファイル読み込み（2ファイル）</h2>
+                <div class="drop-grid">
+                    <div>
+                        <div class="drop-label left">ファイル A</div>
+                        <div class="dropzone" id="dropzoneA">
+                            <input type="file" id="fileInputA" accept=".csv,.xlsx,.xlsm,.xlsb,.xls">
+                            <div class="dz-icon">📂</div>
+                            <p>ドラッグ＆ドロップ or クリック</p>
+                            <div class="hint">CSV / XLSX / XLS / XLSM / XLSB</div>
+                            <div class="file-loaded-info" id="fileInfoA"></div>
+                        </div>
+                        <div class="col-info" id="colInfoA"></div>
+                    </div>
+                    <div>
+                        <div class="drop-label right">ファイル B</div>
+                        <div class="dropzone" id="dropzoneB">
+                            <input type="file" id="fileInputB" accept=".csv,.xlsx,.xlsm,.xlsb,.xls">
+                            <div class="dz-icon">📂</div>
+                            <p>ドラッグ＆ドロップ or クリック</p>
+                            <div class="hint">CSV / XLSX / XLS / XLSM / XLSB</div>
+                            <div class="file-loaded-info" id="fileInfoB"></div>
+                        </div>
+                        <div class="col-info" id="colInfoB"></div>
+                    </div>
+                </div>
+                <div class="error-msg" id="step1Error"></div>
+                <div class="btn-row">
+                    <button class="btn btn-primary" id="toStep2Btn" disabled onclick="goToStep(2)">結合条件へ →</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 2: Join Conditions (with LR assignment and data preview) -->
+        <div class="step-panel" id="step2">
+            <div class="card">
+                <h2><span class="icon">⚙️</span> Step 2: 結合条件</h2>
+
+                <!-- LR Assignment -->
+                <div class="section-sep">Left / Right 割当て</div>
+                <div class="lr-assign">
+                    <div class="lr-badge left">
+                        <div class="lr-title">LEFT（基準側）</div>
+                        <div class="lr-name" id="leftFileName"></div>
+                        <div class="lr-meta" id="leftFileMeta"></div>
+                    </div>
+                    <button class="swap-btn-inline" onclick="swapFiles()" title="左右入替">⇄</button>
+                    <div class="lr-badge right">
+                        <div class="lr-title">RIGHT</div>
+                        <div class="lr-name" id="rightFileName"></div>
+                        <div class="lr-meta" id="rightFileMeta"></div>
+                    </div>
+                </div>
+
+                <!-- Data Preview -->
+                <div class="section-sep">データプレビュー（先頭5行）</div>
+                <div class="preview-grid">
+                    <div class="preview-pane">
+                        <div class="pane-title left">LEFT</div>
+                        <div class="table-wrapper">
+                            <table class="data-table" id="leftPreviewTable"></table>
+                        </div>
+                    </div>
+                    <div class="preview-pane">
+                        <div class="pane-title right">RIGHT</div>
+                        <div class="table-wrapper">
+                            <table class="data-table" id="rightPreviewTable"></table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Conditions -->
+                <div class="section-sep" style="margin-top:24px;">結合条件（AND結合）</div>
+                <div class="condition-list" id="conditionList"></div>
+                <div class="add-cond-btns">
+                    <button class="btn btn-secondary" onclick="addEqualCondition()">＋ 等価条件を追加</button>
+                    <button class="btn btn-secondary" onclick="addRangeCondition()">＋ 範囲条件を追加</button>
+                </div>
+                <div class="section-sep" style="margin-top:24px;">JOIN種別</div>
+                <div class="join-selector" id="joinSelector">
+                    <div class="join-option selected" data-type="INNER" onclick="selectJoin(this)">INNER</div>
+                    <div class="join-option" data-type="LEFT" onclick="selectJoin(this)">LEFT</div>
+                    <div class="join-option" data-type="RIGHT" onclick="selectJoin(this)">RIGHT</div>
+                    <div class="join-option" data-type="OUTER" onclick="selectJoin(this)">OUTER</div>
+                </div>
+                <div class="error-msg" id="step2Error"></div>
+                <div class="btn-row">
+                    <button class="btn btn-secondary" onclick="goToStep(1)">← 戻る</button>
+                    <button class="btn btn-primary" id="previewBtn" onclick="runJoinPreview()">プレビュー →</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 3: Preview -->
+        <div class="step-panel" id="step3">
+            <div class="card">
+                <h2><span class="icon">👁️</span> Step 3: プレビュー</h2>
+                <div class="meta-grid" id="resultMeta"></div>
+                <div class="warning-msg" id="joinWarning"></div>
+                <div class="section-sep">先頭20行</div>
+                <div class="table-wrapper">
+                    <table class="data-table" id="previewTable"></table>
+                </div>
+                <div class="btn-row">
+                    <button class="btn btn-secondary" onclick="goToStep(2)">← 戻る</button>
+                    <button class="btn btn-primary" onclick="goToStep(4)">CSVダウンロード →</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Step 4: Download -->
+        <div class="step-panel" id="step4">
+            <div class="card">
+                <div class="download-area">
+                    <div class="dl-icon">⬇️</div>
+                    <div class="dl-filename" id="dlFilename"></div>
+                    <button class="btn btn-success" id="downloadBtn" style="font-size:1rem;padding:14px 36px;">💾
+                        CSVをダウンロード</button>
+                </div>
+                <div class="btn-row" style="justify-content:center;margin-top:28px;">
+                    <button class="btn btn-secondary" onclick="goToStep(3)">← プレビューに戻る</button>
+                    <button class="btn btn-secondary" onclick="resetAll()">🔄 最初からやり直す</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        /* ============================================================
+           CSV Joiner Tool — Full Implementation
+           ============================================================ */
+
+        // ---- State ----
+        let fileA = null, fileB = null; // { name, headers:[], data:[[]], rows, cols }
+        let leftFile = null, rightFile = null; // references to fileA/fileB
+        let joinType = 'INNER';
+        let joinResult = { headers: [], data: [] };
+        let conditionIdCounter = 0;
+
+        // ---- Utility ----
+        function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+        function csvEscape(val) {
+            if (val.includes(',') || val.includes('"') || val.includes('\n') || val.includes('\r')) return '"' + val.replace(/"/g, '""') + '"';
+            return val;
+        }
+
+        // ---- Step Navigation ----
+        function goToStep(n) {
+            document.querySelectorAll('.step-panel').forEach(p => p.classList.remove('active'));
+            document.getElementById('step' + n).classList.add('active');
+            document.querySelectorAll('.step-dot').forEach(d => {
+                const s = parseInt(d.dataset.step);
+                d.classList.remove('active', 'done');
+                if (s < n) d.classList.add('done');
+                if (s === n) d.classList.add('active');
+            });
+            if (n === 2) { updateStep2Display(); updateConditionSelectors(); }
+            if (n === 4) updateDownloadFilename();
+        }
+
+        // ---- Charset detection for CSV ----
+        function detectAndDecode(uint8arr) {
+            if (uint8arr[0] === 0xEF && uint8arr[1] === 0xBB && uint8arr[2] === 0xBF) return new TextDecoder('utf-8').decode(uint8arr);
+            // Check for Shift-JIS patterns
+            let sjisScore = 0, utf8Score = 0;
+            for (let i = 0; i < Math.min(uint8arr.length, 4096); i++) {
+                const b = uint8arr[i];
+                if (b >= 0x80) {
+                    if ((b >= 0x81 && b <= 0x9F) || (b >= 0xE0 && b <= 0xFC)) {
+                        if (i + 1 < uint8arr.length) { const b2 = uint8arr[i + 1]; if ((b2 >= 0x40 && b2 <= 0x7E) || (b2 >= 0x80 && b2 <= 0xFC)) { sjisScore++; i++; } }
+                    }
+                    if ((b & 0xE0) === 0xC0) { if (i + 1 < uint8arr.length && (uint8arr[i + 1] & 0xC0) === 0x80) { utf8Score++; i++; } }
+                    else if ((b & 0xF0) === 0xE0) { if (i + 2 < uint8arr.length && (uint8arr[i + 1] & 0xC0) === 0x80 && (uint8arr[i + 2] & 0xC0) === 0x80) { utf8Score += 2; i += 2; } }
+                }
+            }
+            if (sjisScore > utf8Score) return new TextDecoder('shift-jis').decode(uint8arr);
+            return new TextDecoder('utf-8').decode(uint8arr);
+        }
+
+        // ---- File Loading ----
+        const allowedExt = ['.csv', '.xlsx', '.xlsm', '.xlsb', '.xls'];
+        function setupDropzone(id, inputId, side) {
+            const dz = document.getElementById(id);
+            const fi = document.getElementById(inputId);
+            dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+            dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+            dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('dragover'); if (e.dataTransfer.files.length) loadFile(e.dataTransfer.files[0], side); });
+            fi.addEventListener('change', () => { if (fi.files.length) loadFile(fi.files[0], side); });
+        }
+        setupDropzone('dropzoneA', 'fileInputA', 'A');
+        setupDropzone('dropzoneB', 'fileInputB', 'B');
+
+        function showError(id, msg) { const el = document.getElementById(id); el.textContent = msg; el.classList.add('visible'); }
+        function hideError(id) { document.getElementById(id).classList.remove('visible'); }
+
+        function loadFile(file, side) {
+            hideError('step1Error');
+            const ext = '.' + file.name.split('.').pop().toLowerCase();
+            if (!allowedExt.includes(ext)) { showError('step1Error', `非対応の形式: ${ext}`); return; }
+
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                try {
+                    let wb;
+                    const uint8 = new Uint8Array(e.target.result);
+                    if (ext === '.csv') {
+                        const text = detectAndDecode(uint8);
+                        wb = XLSX.read(text, { type: 'string' });
+                    } else {
+                        wb = XLSX.read(uint8, { type: 'array', cellStyles: false, cellFormula: false });
+                    }
+                    const sheet = wb.Sheets[wb.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+                    if (!jsonData.length) { showError('step1Error', 'データが空です'); return; }
+                    const headers = jsonData[0].map(h => String(h).trim() || `Col_${jsonData[0].indexOf(h) + 1}`);
+                    const data = jsonData.slice(1).map(row => {
+                        const r = [];
+                        for (let i = 0; i < headers.length; i++) r.push(row[i] !== undefined ? String(row[i]) : '');
+                        return r;
+                    });
+                    const fileObj = { name: file.name, headers, data, rows: data.length, cols: headers.length };
+
+                    if (side === 'A') { fileA = fileObj; } else { fileB = fileObj; }
+                    updateFileDisplay(side, fileObj);
+                    checkBothLoaded();
+                } catch (err) { showError('step1Error', 'ファイル読込エラー: ' + err.message); }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function updateFileDisplay(side, f) {
+            const dz = document.getElementById('dropzone' + side);
+            const info = document.getElementById('fileInfo' + side);
+            const colInfo = document.getElementById('colInfo' + side);
+            dz.classList.add('loaded');
+            info.textContent = `✅ ${f.name}（${f.rows}行 × ${f.cols}列）`;
+            info.style.display = 'block';
+            colInfo.innerHTML = f.headers.map(h => `<span class="col-tag">${escapeHtml(h)}</span>`).join('');
+        }
+
+        function checkBothLoaded() {
+            const ready = fileA && fileB;
+            document.getElementById('toStep2Btn').disabled = !ready;
+            if (ready) { leftFile = fileA; rightFile = fileB; }
+        }
+
+        // ---- Step 2: Left/Right + Data Preview ----
+        function updateStep2Display() {
+            if (!leftFile || !rightFile) return;
+            document.getElementById('leftFileName').textContent = leftFile.name;
+            document.getElementById('leftFileMeta').textContent = `${leftFile.rows}行 × ${leftFile.cols}列`;
+            document.getElementById('rightFileName').textContent = rightFile.name;
+            document.getElementById('rightFileMeta').textContent = `${rightFile.rows}行 × ${rightFile.cols}列`;
+            renderSidePreview('leftPreviewTable', leftFile);
+            renderSidePreview('rightPreviewTable', rightFile);
+        }
+
+        function renderSidePreview(tableId, fileObj) {
+            if (!fileObj) return;
+            const rows = fileObj.data.slice(0, 5);
+            let html = '<thead><tr><th>#</th>';
+            fileObj.headers.forEach(h => html += `<th>${escapeHtml(h)}</th>`);
+            html += '</tr></thead><tbody>';
+            rows.forEach((row, i) => {
+                html += `<tr><td class="row-num">${i + 1}</td>`;
+                row.forEach(v => {
+                    const s = v !== null && v !== undefined ? String(v) : '';
+                    html += s === '' ? '<td class="empty-cell">—</td>' : `<td>${escapeHtml(s)}</td>`;
+                });
+                html += '</tr>';
+            });
+            html += '</tbody>';
+            document.getElementById(tableId).innerHTML = html;
+        }
+
+        function swapFiles() {
+            [leftFile, rightFile] = [rightFile, leftFile];
+            updateStep2Display();
+            updateConditionSelectors();
+        }
+
+        // ---- Step 3: Conditions ----
+        function getLeftCols() { return leftFile ? leftFile.headers : []; }
+        function getRightCols() { return rightFile ? rightFile.headers : []; }
+
+        function buildOptions(cols, selected) {
+            return cols.map((c, i) => `<option value="${i}" ${i === selected ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('');
+        }
+
+        function addEqualCondition() {
+            const id = conditionIdCounter++;
+            const lCols = getLeftCols(), rCols = getRightCols();
+            const html = `<div class="condition-row" id="cond_${id}" data-type="equal">
+        <span class="condition-type-badge badge-equal">等価</span>
+        <span class="cond-label">L:</span><select id="cond_${id}_lc">${buildOptions(lCols, 0)}</select>
+        <span class="cond-label">＝</span>
+        <span class="cond-label">R:</span><select id="cond_${id}_rc">${buildOptions(rCols, 0)}</select>
+        <button class="btn btn-danger" onclick="removeCond(${id})">×</button>
+    </div>`;
+            document.getElementById('conditionList').insertAdjacentHTML('beforeend', html);
+            updatePreviewBtn();
+        }
+
+        function addRangeCondition() {
+            const id = conditionIdCounter++;
+            const lCols = getLeftCols(), rCols = getRightCols();
+            const html = `<div class="condition-row" id="cond_${id}" data-type="range">
+        <span class="condition-type-badge badge-range">範囲</span>
+        <span class="cond-label">L:</span><select id="cond_${id}_lc">${buildOptions(lCols, 0)}</select>
+        <span class="cond-label">が</span>
+        <span class="cond-label">R開始:</span><select id="cond_${id}_rs">${buildOptions(rCols, 0)}</select>
+        <span class="cond-label">〜</span>
+        <span class="cond-label">R終了:</span><select id="cond_${id}_re">${buildOptions(rCols, Math.min(1, rCols.length - 1))}</select>
+        <span class="cond-label">型:</span>
+        <select id="cond_${id}_dt" style="min-width:90px;">
+            <option value="date">日付</option><option value="number">数値</option><option value="string">文字列</option>
+        </select>
+        <button class="btn btn-danger" onclick="removeCond(${id})">×</button>
+    </div>`;
+            document.getElementById('conditionList').insertAdjacentHTML('beforeend', html);
+            updatePreviewBtn();
+        }
+
+        function removeCond(id) {
+            const el = document.getElementById('cond_' + id);
+            if (el) el.remove();
+            updatePreviewBtn();
+        }
+
+        function updatePreviewBtn() {
+            const hasConditions = document.querySelectorAll('.condition-row').length > 0;
+            document.getElementById('previewBtn').disabled = !hasConditions;
+        }
+
+        function updateConditionSelectors() {
+            // Rebuild options in existing condition rows
+            document.querySelectorAll('.condition-row').forEach(row => {
+                row.querySelectorAll('select').forEach(sel => {
+                    const id = sel.id;
+                    if (!id) return;
+                    const val = sel.value;
+                    if (id.endsWith('_lc')) { sel.innerHTML = buildOptions(getLeftCols(), parseInt(val) || 0); }
+                    else if (id.endsWith('_rc') || id.endsWith('_rs') || id.endsWith('_re')) { sel.innerHTML = buildOptions(getRightCols(), parseInt(val) || 0); }
+                });
+            });
+            updatePreviewBtn();
+        }
+
+        function selectJoin(el) {
+            document.querySelectorAll('.join-option').forEach(o => o.classList.remove('selected'));
+            el.classList.add('selected');
+            joinType = el.dataset.type;
+        }
+
+        // ---- Date Parsing ----
+        function parseDate(str) {
+            if (!str || typeof str !== 'string') return null;
+            str = str.trim();
+            let m;
+            // yyyyMMdd
+            if ((m = str.match(/^(\d{4})(\d{2})(\d{2})$/))) return new Date(+m[1], +m[2] - 1, +m[3]);
+            // yyyy/M/d or yyyy-M-d (with optional time)
+            if ((m = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/))) return new Date(+m[1], +m[2] - 1, +m[3]);
+            return null;
+        }
+
+        // ---- JOIN Execution ----
+        function getConditions() {
+            const conds = [];
+            document.querySelectorAll('.condition-row').forEach(row => {
+                const id = row.id.replace('cond_', '');
+                const type = row.dataset.type;
+                if (type === 'equal') {
+                    conds.push({ type: 'equal', lCol: parseInt(document.getElementById(`cond_${id}_lc`).value), rCol: parseInt(document.getElementById(`cond_${id}_rc`).value) });
+                } else {
+                    conds.push({
+                        type: 'range', lCol: parseInt(document.getElementById(`cond_${id}_lc`).value),
+                        rStart: parseInt(document.getElementById(`cond_${id}_rs`).value),
+                        rEnd: parseInt(document.getElementById(`cond_${id}_re`).value),
+                        dataType: document.getElementById(`cond_${id}_dt`).value
+                    });
+                }
+            });
+            return conds;
+        }
+
+        function compareValues(val, start, end, dataType) {
+            if (dataType === 'date') {
+                const v = parseDate(val), s = parseDate(start), e = parseDate(end);
+                if (!v || !s || !e) return { match: false, warn: true };
+                return { match: v >= s && v <= e, warn: false };
+            } else if (dataType === 'number') {
+                const v = parseFloat(val), s = parseFloat(start), e = parseFloat(end);
+                if (isNaN(v) || isNaN(s) || isNaN(e)) return { match: false, warn: true };
+                return { match: v >= s && v <= e, warn: false };
+            } else {
+                return { match: val >= start && val <= end, warn: false };
+            }
+        }
+
+        function runJoinPreview() {
+            hideError('step2Error');
+            const conds = getConditions();
+            if (!conds.length) { showError('step2Error', '結合条件を1つ以上追加してください'); return; }
+
+            const lData = leftFile.data, rData = rightFile.data;
+            const lHeaders = leftFile.headers, rHeaders = rightFile.headers;
+            let warnCount = 0;
+
+            // Build output headers with duplication handling
+            const outHeaders = [];
+            const lSet = new Set(lHeaders), rSet = new Set(rHeaders);
+            const dupes = new Set(lHeaders.filter(h => rSet.has(h)));
+            lHeaders.forEach(h => outHeaders.push(dupes.has(h) ? h + '_L' : h));
+            rHeaders.forEach(h => outHeaders.push(dupes.has(h) ? h + '_R' : h));
+
+            // Build hash index for equal conditions
+            const equalConds = conds.filter(c => c.type === 'equal');
+            const rangeConds = conds.filter(c => c.type === 'range');
+            let rIndex = null;
+            if (equalConds.length > 0 && rangeConds.length === 0) {
+                // Pure hash join
+                rIndex = new Map();
+                rData.forEach((row, i) => {
+                    const key = equalConds.map(c => row[c.rCol]).join('\0');
+                    if (!rIndex.has(key)) rIndex.set(key, []);
+                    rIndex.get(key).push(i);
+                });
+            }
+
+            const resultData = [];
+            const lMatched = new Array(lData.length).fill(false);
+            const rMatched = new Array(rData.length).fill(false);
+            const emptyL = new Array(lHeaders.length).fill('');
+            const emptyR = new Array(rHeaders.length).fill('');
+
+            for (let li = 0; li < lData.length; li++) {
+                const lRow = lData[li];
+                let matched = false;
+                let rCandidates;
+
+                if (rIndex) {
+                    const key = equalConds.map(c => lRow[c.lCol]).join('\0');
+                    rCandidates = rIndex.get(key) || [];
+                } else {
+                    rCandidates = rData.map((_, i) => i);
+                }
+
+                for (const ri of rCandidates) {
+                    const rRow = rData[ri];
+                    let allMatch = true;
+
+                    // Check equal conditions (if not already filtered by hash)
+                    if (!rIndex) {
+                        for (const c of equalConds) {
+                            if (String(lRow[c.lCol]) !== String(rRow[c.rCol])) { allMatch = false; break; }
+                        }
+                    }
+                    if (!allMatch) continue;
+
+                    // Check range conditions
+                    for (const c of rangeConds) {
+                        const res = compareValues(lRow[c.lCol], rRow[c.rStart], rRow[c.rEnd], c.dataType);
+                        if (res.warn) warnCount++;
+                        if (!res.match) { allMatch = false; break; }
+                    }
+
+                    if (allMatch) {
+                        resultData.push([...lRow, ...rRow]);
+                        matched = true;
+                        lMatched[li] = true;
+                        rMatched[ri] = true;
+                    }
+                }
+
+                if (!matched && (joinType === 'LEFT' || joinType === 'OUTER')) {
+                    resultData.push([...lRow, ...emptyR]);
+                }
+            }
+
+            if (joinType === 'RIGHT' || joinType === 'OUTER') {
+                for (let ri = 0; ri < rData.length; ri++) {
+                    if (!rMatched[ri]) {
+                        resultData.push([...emptyL, ...rData[ri]]);
+                    }
+                }
+            }
+
+            // For RIGHT JOIN that is not OUTER, we need left-only logic differently
+            if (joinType === 'RIGHT') {
+                // Redo: RIGHT = reverse LEFT
+                const rightResult = [];
+                const rMatched2 = new Array(rData.length).fill(false);
+                for (let ri = 0; ri < rData.length; ri++) {
+                    const rRow = rData[ri];
+                    let matched2 = false;
+                    for (let li2 = 0; li2 < lData.length; li2++) {
+                        const lRow2 = lData[li2];
+                        let allMatch2 = true;
+                        for (const c of equalConds) {
+                            if (String(lRow2[c.lCol]) !== String(rRow[c.rCol])) { allMatch2 = false; break; }
+                        }
+                        if (!allMatch2) continue;
+                        for (const c of rangeConds) {
+                            const res = compareValues(lRow2[c.lCol], rRow[c.rStart], rRow[c.rEnd], c.dataType);
+                            if (res.warn) warnCount++;
+                            if (!res.match) { allMatch2 = false; break; }
+                        }
+                        if (allMatch2) { rightResult.push([...lRow2, ...rRow]); matched2 = true; }
+                    }
+                    if (!matched2) rightResult.push([...emptyL, ...rRow]);
+                }
+                joinResult = { headers: outHeaders, data: rightResult };
+            } else {
+                joinResult = { headers: outHeaders, data: resultData };
+            }
+
+            // Calc match rate
+            const lMatchCount = lMatched.filter(Boolean).length;
+            const matchRate = lData.length > 0 ? ((lMatchCount / lData.length) * 100).toFixed(1) : '0.0';
+
+            // Show preview
+            document.getElementById('resultMeta').innerHTML = `
+        <div class="meta-item"><div class="val">${joinResult.data.length.toLocaleString()}</div><div class="lbl">結合結果 行数</div></div>
+        <div class="meta-item"><div class="val">${joinResult.headers.length}</div><div class="lbl">列数</div></div>
+        <div class="meta-item"><div class="val">${matchRate}%</div><div class="lbl">Left側マッチ率 (${lMatchCount.toLocaleString()}/${lData.length.toLocaleString()})</div></div>
+    `;
+
+            const warnEl = document.getElementById('joinWarning');
+            if (warnCount > 0) { warnEl.textContent = `⚠️ 値の変換に失敗した比較: ${warnCount}件（該当行は非マッチとして処理）`; warnEl.classList.add('visible'); }
+            else { warnEl.classList.remove('visible'); }
+
+            // Preview table (top 20 rows)
+            const previewRows = joinResult.data.slice(0, 20);
+            let thtml = '<thead><tr><th>#</th>';
+            joinResult.headers.forEach(h => thtml += `<th>${escapeHtml(h)}</th>`);
+            thtml += '</tr></thead><tbody>';
+            previewRows.forEach((row, i) => {
+                thtml += `<tr><td class="row-num">${i + 1}</td>`;
+                row.forEach(v => {
+                    const s = v !== null && v !== undefined ? String(v) : '';
+                    thtml += s === '' ? '<td class="empty-cell">—</td>' : `<td>${escapeHtml(s)}</td>`;
+                });
+                thtml += '</tr>';
+            });
+            thtml += '</tbody>';
+            document.getElementById('previewTable').innerHTML = thtml;
+            goToStep(3);
+        }
+
+        // ---- Step 5: Download ----
+        function updateDownloadFilename() {
+            const now = new Date();
+            const ts = now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0')
+                + '_' + String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0') + String(now.getSeconds()).padStart(2, '0');
+            document.getElementById('dlFilename').textContent = `joined_${ts}.csv`;
+        }
+
+        document.getElementById('downloadBtn').addEventListener('click', function () {
+            const lines = [];
+            lines.push(joinResult.headers.map(csvEscape).join(','));
+            joinResult.data.forEach(row => {
+                lines.push(row.map(v => csvEscape(v !== null && v !== undefined ? String(v) : '')).join(','));
+            });
+            const csvString = lines.join('\r\n') + '\r\n';
+            const bom = '\uFEFF';
+            const blob = new Blob([bom + csvString], { type: 'text/csv;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = document.getElementById('dlFilename').textContent;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        });
+
+        // ---- Reset ----
+        function resetAll() {
+            fileA = fileB = leftFile = rightFile = null;
+            joinResult = { headers: [], data: [] };
+            conditionIdCounter = 0;
+            document.getElementById('conditionList').innerHTML = '';
+            ['dropzoneA', 'dropzoneB'].forEach(id => document.getElementById(id).classList.remove('loaded'));
+            ['fileInfoA', 'fileInfoB'].forEach(id => { const el = document.getElementById(id); el.textContent = ''; el.style.display = 'none'; });
+            ['colInfoA', 'colInfoB'].forEach(id => document.getElementById(id).innerHTML = '');
+            document.getElementById('fileInputA').value = '';
+            document.getElementById('fileInputB').value = '';
+            document.getElementById('toStep2Btn').disabled = true;
+            hideError('step1Error');
+            updatePreviewBtn();
+            goToStep(1);
+        }
+
+        updatePreviewBtn();
+    </script>
+</body>
+
+</html>
