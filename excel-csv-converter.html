@@ -536,6 +536,10 @@
                     <label for="sheetSelect">シートを選択</label>
                     <select id="sheetSelect"></select>
                 </div>
+                <div class="section-sep">シートプレビュー（先頭10行）</div>
+                <div class="table-wrapper" id="sheetPreviewWrapper" style="max-height:340px;">
+                    <table class="data-table" id="sheetPreviewTable"></table>
+                </div>
                 <div class="btn-row">
                     <button class="btn btn-secondary" onclick="goToStep(1)">← 戻る</button>
                     <button class="btn btn-primary" onclick="onSheetSelected()">次へ →</button>
@@ -765,6 +769,52 @@
                 if (i === 0) opt.selected = true;
                 sel.appendChild(opt);
             });
+            // Render preview for the initially selected sheet
+            renderSheetPreview(sel.value);
+        }
+
+        // Sheet preview on change
+        document.getElementById('sheetSelect').addEventListener('change', function () {
+            renderSheetPreview(this.value);
+        });
+
+        function renderSheetPreview(sheetName) {
+            const table = document.getElementById('sheetPreviewTable');
+            if (!workbook || !sheetName) { table.innerHTML = ''; return; }
+
+            const sheet = workbook.Sheets[sheetName];
+            const ref = sheet['!ref'];
+            if (!ref) { table.innerHTML = '<tbody><tr><td style="color:var(--text-muted);font-style:italic;">このシートにはデータがありません</td></tr></tbody>'; return; }
+
+            const range = XLSX.utils.decode_range(ref);
+            const maxRows = Math.min(range.e.r + 1, 10);
+            const cols = range.e.c + 1;
+
+            let html = '<thead><tr><th></th>';
+            for (let c = 0; c < cols; c++) {
+                html += `<th>${colToLetter(c + 1)}</th>`;
+            }
+            html += '</tr></thead><tbody>';
+
+            for (let r = 0; r < maxRows; r++) {
+                html += `<tr><td class="row-num">${r + 1}</td>`;
+                for (let c = 0; c < cols; c++) {
+                    const val = getCellValue(sheet, r, c);
+                    if (val === '' || val === null || val === undefined) {
+                        html += '<td class="empty-cell">—</td>';
+                    } else {
+                        html += `<td>${escapeHtml(String(val))}</td>`;
+                    }
+                }
+                html += '</tr>';
+            }
+
+            if (range.e.r + 1 > 10) {
+                html += `<tr><td colspan="${cols + 1}" style="text-align:center;color:var(--text-muted);font-style:italic;padding:8px;">… 以降 ${range.e.r + 1 - 10} 行省略（全 ${range.e.r + 1} 行）</td></tr>`;
+            }
+
+            html += '</tbody>';
+            table.innerHTML = html;
         }
 
         function onSheetSelected() {
